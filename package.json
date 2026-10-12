@@ -1,0 +1,13 @@
+{
+  "name": "drip-toko-digital",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Starter website toko digital connected to Drip Client Official product catalog API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#160d25">
+  <title>Toko Digital</title>
+  <style>
+    :root { color-scheme: dark; --bg:#100a19; --panel:#1b1228; --line:#39234d; --pink:#e34af4; --text:#f7efff; --muted:#b8a9c7; --green:#48e0ad; }
+    * { box-sizing:border-box }
+    body { margin:0; background:radial-gradient(ellipse at top,#291138 0,#100a19 52%); color:var(--text); font:16px/1.5 system-ui,-apple-system,Segoe UI,sans-serif; min-height:100vh }
+    header { border-bottom:1px solid var(--line); padding:20px 16px; position:sticky; top:0; background:#100a19ed; backdrop-filter:blur(12px); z-index:2 }
+    .wrap { width:min(100% - 28px,1000px); margin:auto }
+    .brand { display:flex; gap:12px; align-items:center; font-weight:800; letter-spacing:.2px }
+    .logo { width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,var(--pink),#8739e8);display:grid;place-items:center;font-size:20px }
+    .sub { color:var(--muted);font-size:13px;font-weight:500 }
+    main { padding:30px 0 48px }
+    .hero { padding:24px 0 20px }
+    .eyebrow { color:var(--green);font-weight:700;font-size:13px;letter-spacing:1.4px;text-transform:uppercase }
+    h1 { font-size:clamp(30px,6vw,48px);line-height:1.08;margin:10px 0 12px;letter-spacing:-1.2px }
+    p { color:var(--muted);margin:0 }
+    .toolbar { display:flex;gap:10px;flex-wrap:wrap;margin:22px 0 }
+    input { flex:1;min-width:180px;background:var(--panel);border:1px solid var(--line);border-radius:13px;padding:13px 15px;color:var(--text);font:inherit;outline:none }
+    input:focus { border-color:var(--pink) }
+    button { border:0;border-radius:13px;padding:12px 17px;background:var(--pink);color:#210b29;font:700 15px system-ui;cursor:pointer }
+    button:disabled { opacity:.55;cursor:wait }
+    .status { padding:14px 16px;border:1px solid var(--line);background:#1a1125;border-radius:14px;color:var(--muted);margin-bottom:18px }
+    .status.error { border-color:#85444f;color:#ffc4cb }
+    .status.ok { color:var(--green) }
+    .grid { display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:14px }
+    .card { border:1px solid var(--line);background:linear-gradient(145deg,#21152f,#160f21);border-radius:18px;padding:18px;display:flex;flex-direction:column;min-height:190px }
+    .tag { color:var(--green);font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px }
+    .card h2 { font-size:18px;line-height:1.3;margin:9px 0 5px;overflow-wrap:anywhere }
+    .code { font-size:12px;color:var(--muted);overflow-wrap:anywhere }
+    .price { font-size:24px;font-weight:850;margin-top:auto;padding-top:18px }
+    .stock { font-size:12px;color:var(--muted);margin-top:4px }
+    .empty { grid-column:1/-1;text-align:center;padding:30px;border:1px dashed var(--line);border-radius:16px;color:var(--muted) }
+    footer { border-top:1px solid var(--line);padding:22px 0 30px;color:var(--muted);font-size:12px }
+    @media (max-width:520px) { header{padding:14px 0}.toolbar button{width:100%}.hero{padding-top:16px} }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap brand">
+      <div class="logo">✦</div>
+      <div>TOKO DIGITAL<div class="sub">Katalog produk online</div></div>
+    </div>
+  </header>
+  <main class="wrap">
+    <section class="hero">
+      <div class="eyebrow">Katalog live</div>
+      <h1>Temukan produk<br>yang kamu butuhkan.</h1>
+      <p>Daftar produk dimuat dari API Drip Client Official. Harga yang tampil mengikuti data yang dikembalikan API.</p>
+    </section>
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Cari nama produk atau kode…" aria-label="Cari produk">
+      <button id="refresh">↻ Muat ulang produk</button>
+    </div>
+    <div id="status" class="status">Menghubungkan ke API…</div>
+    <section id="products" class="grid" aria-live="polite"></section>
+  </main>
+  <footer><div class="wrap">Katalog ini menampilkan informasi dari penyedia API. Belum ada pembayaran atau pemesanan otomatis yang diaktifkan.</div></footer>
+  <script>
+    const statusBox = document.querySelector("#status");
+    const productBox = document.querySelector("#products");
+    const searchBox = document.querySelector("#search");
+    const refreshButton = document.querySelector("#refresh");
+    let allProducts = [];
+
+    function money(item) {
+      if (item.priceUsd != null) return "$" + item.priceUsd;
+      if (item.price != null) return String(item.price) + " " + (item.currency || "");
+      return "Harga belum tersedia";
+    }
+
+    function render() {
+      const term = searchBox.value.trim().toLowerCase();
+      const items = allProducts.filter(p =>
+        String(p.name || "").toLowerCase().includes(term) ||
+        String(p.apiCode || "").toLowerCase().includes(term) ||
+        String(p.category || "").toLowerCase().includes(term)
+      );
+      productBox.replaceChildren();
+      if (!items.length) {
+        const empty = document.createElement("div");
+        empty.className = "empty";
+        empty.textContent = allProducts.length ? "Tidak ada produk yang cocok." : "Belum ada produk untuk ditampilkan.";
+        productBox.append(empty);
+        return;
+      }
+      for (const item of items) {
+        const card = document.createElement("article");
+        card.className = "card";
+        const category = document.createElement("div");
+        category.className = "tag";
+        category.textContent = item.category || "Produk";
+        const name = document.createElement("h2");
+        name.textContent = item.name || item.label || "Produk tanpa nama";
+        const code = document.createElement("div");
+        code.className = "code";
+        code.textContent = "Kode: " + (item.apiCode || "—");
+        const price = document.createElement("div");
+        price.className = "price";
+        price.textContent = money(item);
+        const stock = document.createElement("div");
+        stock.className = "stock";
+        stock.textContent = item.is_maintenance ? "Sedang pemeliharaan" : (item.inStock === false ? "Stok habis" : (item.stock != null ? "Stok tersedia: " + item.stock : "Status stok tidak tersedia"));
+        card.append(category, name, code, price, stock);
+        productBox.append(card);
+      }
+    }
+
+    async function loadProducts() {
+      refreshButton.disabled = true;
+      statusBox.className = "status";
+      statusBox.textContent = "Mengambil data produk dari API…";
+      try {
+        const response = await fetch("/api/products", { headers: { "Accept": "application/json" } });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.details || payload.error || ("HTTP " + response.status));
+        const items = payload?.data?.items || payload?.items;
+        if (!Array.isArray(items)) throw new Error("Respons API diterima, tetapi format daftar produk tidak dikenali.");
+        allProducts = items;
+        statusBox.className = "status ok";
+        statusBox.textContent = "Terhubung. " + items.length + " produk ditemukan.";
+        render();
+      } catch (err) {
+        allProducts = [];
+        render();
+        statusBox.className = "status error";
+        statusBox.textContent = "Belum berhasil terhubung: " + err.message + " — coba lagi nanti atau periksa status API.";
+      } finally {
+        refreshButton.disabled = false;
+      }
+    }
+
+    searchBox.addEventListener("input", render);
+    refreshButton.addEventListener("click", loadProducts);
+    loadProducts();
+  </script>
+</body>
+</html>
