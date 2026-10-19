@@ -1,13 +1,10 @@
 {
-  "name": "drip-toko-digital",
+  "name": "iky-store",
   "version": "1.0.0",
   "private": true,
-  "description": "Starter website toko digital connected to Drip Client Official product catalog API",
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
-  }
+  "description": "IKY STORE digital products storefront using Drip Client Official API",
+  "type": "module",
+  "scripts": { "start": "node server.js", "dev": "node --watch server.js" },
+  "dependencies": { "dotenv": "^16.4.7", "express": "^4.21.2" },
+  "engines": { "node": ">=18" }
 }

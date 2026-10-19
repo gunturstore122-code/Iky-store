@@ -1,26 +1,14 @@
-# Website Toko Digital — Drip API
+# IKY STORE
 
-Starter website responsif untuk menampilkan katalog produk dari endpoint publik Drip Client Official.
+Proyek website katalog IKY STORE untuk dijalankan di Render. API key disimpan sebagai Environment Variable di Render, bukan di file proyek.
 
-## Yang sudah berfungsi
-- Mengambil katalog dari `GET https://dripclientofficial.dev/api/v1/products` melalui server.
-- Menampilkan nama produk, kode API, harga, dan status stok.
-- Pencarian produk dan tombol muat ulang.
-- API key tidak ditaruh di HTML/frontend.
+## Cara paling singkat
 
-## Menjalankan di komputer/server
-Perlu Node.js 18 atau lebih baru.
+1. Upload **isi folder ini** ke repository GitHub bernama `iky-store` (jangan upload ZIP sebagai satu file; ekstrak dulu).
+2. Buka https://dashboard.render.com/ lalu pilih **New → Blueprint** dan pilih repository `iky-store` yang berisi `render.yaml`.
+3. Saat Render meminta `DRIP_API_KEY`, masukkan API key BARU milikmu. Jangan bagikan key ke siapa pun atau masukkan ke GitHub.
+4. Deploy. Setelah selesai, buka URL `.onrender.com` yang diberikan Render.
 
-1. Ekstrak ZIP.
-2. Jalankan `npm start`.
-3. Buka `http://localhost:3000`.
+Konfigurasi API sudah memakai `https://dripclientofficial.dev/api/v1`. Jangan ubah `ALLOW_ORDERS=false` sebelum katalog dan API key diuji. Membuat order dapat memotong saldo wallet provider.
 
-Katalog publik tidak memerlukan API key. Jika ingin mencoba harga tier akun, salin `.env.example` menjadi `.env`, masukkan API key BARU ke `DRIP_API_KEY`, lalu jalankan server dengan environment variable tersebut. Jangan upload file `.env` ke repositori publik.
-
-## Deploy
-Deploy aplikasi Node.js ini ke hosting yang mendukung Node.js. Set start command ke `npm start`. Jika perlu key, tambahkan `DRIP_API_KEY` melalui menu Environment Variables/Secrets di hosting, bukan di kode website.
-
-## Batasan
-Ini baru katalog produk. Belum ada checkout, pembayaran, pembuatan order, atau pengiriman lisensi otomatis. Sebelum menambahkan order, periksa schema request resmi untuk `POST /api/v1/orders`, aturan SKU, dan alur pembayaran di dokumentasi penyedia API.
-
-Jika katalog gagal dimuat, cek status API dan log server. Error `Failed to fetch` di playground browser dapat disebabkan oleh CORS; website ini memanggil API dari server untuk menghindari masalah CORS browser.
+Catatan: website ini menampilkan katalog dari API provider. Pembayaran pelanggan seperti QRIS/DANA belum terintegrasi; itu membutuhkan payment gateway tersendiri. GitHub Pages saja tidak bisa menjalankan backend Node.js atau menyimpan API key dengan aman.

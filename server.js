@@ -1,85 +1,90 @@
-const http = require("node:http");
-const fs = require("node:fs");
-const path = require("node:path");
+import express from "express";
+import dotenv from "dotenv";
+import crypto from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const PORT = Number(process.env.PORT || 3000);
-const ROOT = __dirname;
-const PUBLIC_DIR = path.join(ROOT, "public");
-const API_URL = "https://dripclientofficial.dev/api/v1/products";
+dotenv.config();
+const app = express();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PORT = process.env.PORT || 3000;
+const API_BASE = (process.env.DRIP_API_BASE || "https://dripclientofficial.dev/api/v1").replace(/\/+$/, "");
+const API_KEY = process.env.DRIP_API_KEY || "";
+app.use(express.json({ limit: "20kb" }));
+app.use(express.static(path.join(__dirname, "public")));
 
-const mimeTypes = {
-  ".html": "text/html; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".json": "application/json; charset=utf-8",
-  ".svg": "image/svg+xml"
-};
-
-function sendJson(res, status, data) {
-  res.writeHead(status, {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store"
-  });
-  res.end(JSON.stringify(data));
+async function drip(pathname, options = {}) {
+  const headers = { Accept: "application/json", ...(options.headers || {}) };
+  if (API_KEY) headers.Authorization = `Bearer ${API_KEY}`;
+  const response = await fetch(`${API_BASE}${pathname}`, { ...options, headers });
+  const raw = await response.text();
+  let body;
+  try { body = JSON.parse(raw); } catch { body = { error: { message: "API mengembalikan respons yang tidak valid." } }; }
+  if (!response.ok) {
+    const err = new Error(body?.error?.message || `API error (${response.status})`);
+    err.status = response.status;
+    err.code = body?.error?.code;
+    throw err;
+  }
+  return body;
 }
 
-const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true, configured: Boolean(API_KEY), ordersEnabled: process.env.ALLOW_ORDERS === "true" });
+});
 
-  if (url.pathname === "/api/products") {
-    try {
-      const headers = { "Accept": "application/json" };
-      // Public catalog works without a key. A new key can optionally request account-tier prices.
-      if (process.env.DRIP_API_KEY) {
-        headers["Authorization"] = `Bearer ${process.env.DRIP_API_KEY}`;
-      }
-
-      const upstream = await fetch(API_URL, { headers, signal: AbortSignal.timeout(15000) });
-      const raw = await upstream.text();
-      let data;
-      try {
-        data = JSON.parse(raw);
-      } catch {
-        data = { message: "API returned a non-JSON response." };
-      }
-
-      if (!upstream.ok) {
-        return sendJson(res, upstream.status, {
-          error: "API provider returned an error.",
-          status: upstream.status,
-          details: data
-        });
-      }
-      return sendJson(res, 200, data);
-    } catch (err) {
-      return sendJson(res, 502, {
-        error: "Could not connect to Drip API.",
-        details: err.name === "TimeoutError" ? "Request timed out." : "Check server internet access and API availability."
-      });
-    }
+app.get("/api/products", async (_req, res) => {
+  try {
+    const result = await drip("/products");
+    res.set("Cache-Control", "public, max-age=30");
+    res.json(result);
+  } catch (e) {
+    res.status(e.status || 502).json({ error: { message: e.message || "Gagal mengambil katalog produk." } });
   }
+});
 
-  let pathname = decodeURIComponent(url.pathname);
-  if (pathname === "/") pathname = "/index.html";
-  const filePath = path.resolve(PUBLIC_DIR, "." + pathname);
-  if (!filePath.startsWith(PUBLIC_DIR + path.sep)) {
-    res.writeHead(403);
-    return res.end("Forbidden");
+app.get("/api/balance", async (_req, res) => {
+  if (!API_KEY) return res.status(503).json({ error: { message: "API key belum dipasang di server." } });
+  try { res.json(await drip("/balance")); }
+  catch (e) { res.status(e.status || 502).json({ error: { message: e.message } }); }
+});
+
+app.post("/api/orders", async (req, res) => {
+  if (process.env.ALLOW_ORDERS !== "true") {
+    return res.status(403).json({ error: { message: "Pembelian dinonaktifkan sampai konfigurasi dan API key diuji. Ubah ALLOW_ORDERS=true setelah siap." } });
   }
-
-  fs.readFile(filePath, (err, contents) => {
-    if (err) {
-      res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
-      return res.end("Not found");
-    }
-    res.writeHead(200, {
-      "Content-Type": mimeTypes[path.extname(filePath)] || "application/octet-stream",
-      "X-Content-Type-Options": "nosniff"
+  if (!API_KEY) return res.status(503).json({ error: { message: "API key belum dipasang di server." } });
+  const { sku, quantity } = req.body || {};
+  if (typeof sku !== "string" || sku.length < 1 || sku.length > 200) {
+    return res.status(400).json({ error: { message: "SKU produk tidak valid." } });
+  }
+  const qty = Number(quantity ?? 1);
+  if (!Number.isInteger(qty) || qty < 1 || qty > 50) {
+    return res.status(400).json({ error: { message: "Jumlah harus 1–50." } });
+  }
+  try {
+    // Never accept price from the browser. Provider calculates price from its own catalog.
+    const result = await drip("/orders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": crypto.randomUUID()
+      },
+      body: JSON.stringify({ sku, quantity: qty })
     });
-    res.end(contents);
-  });
+    res.json(result);
+  } catch (e) {
+    res.status(e.status || 502).json({ error: { message: e.message, code: e.code } });
+  }
 });
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Toko Digital running on port ${PORT}`);
+app.get("/api/orders/:id", async (req, res) => {
+  if (!API_KEY) return res.status(503).json({ error: { message: "API key belum dipasang di server." } });
+  const id = String(req.params.id || "");
+  if (!/^[a-zA-Z0-9_-]{1,120}$/.test(id)) return res.status(400).json({ error: { message: "ID pesanan tidak valid." } });
+  try { res.json(await drip(`/orders/${encodeURIComponent(id)}`)); }
+  catch (e) { res.status(e.status || 502).json({ error: { message: e.message } }); }
 });
+
+app.get("*", (_req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
+app.listen(PORT, () => console.log(`IKY STORE running on http://localhost:${PORT}`));

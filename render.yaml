@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: iky-store
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DRIP_API_BASE
+        value: https://dripclientofficial.dev/api/v1
+      - key: DRIP_API_KEY
+        sync: false
+      - key: ALLOW_ORDERS
+        value: "false"
